@@ -1,0 +1,126 @@
+[build-system]
+requires = [
+    "setuptools",
+    "setuptools-scm",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gnn_local_stress"
+description = """Github repository for the article
+'Physics-Informed Graph Neural Networks to Reconstruct Local Fields considering
+finite strain hyperelasticity'"""
+readme = "README.md"
+requires-python = ">=3.12"
+keywords = [
+    "physics-informed",
+    "PINN",
+    "GNN",
+    "machine-learning",
+    "ai",
+    "physics",
+    "pytorch",
+    "torch_geometric",
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "pymupdf",
+    "pyyaml",
+    "pyvista",
+    "torch",
+    "torch-geometric",
+    "fedoo",
+    "pandas",
+    "tqdm",
+    "trimesh",
+    "tabulate",
+    "gmsh",
+    "microgen",
+    "scipy",
+    "fire",
+    "meshio",
+    "scikit-learn",
+    "pypardiso",
+    "tensorboard",
+    "multiprocess",
+]
+dynamic = ["version"]
+
+[[project.authors]]
+name = "Manuel Ricardo GUEVARA GARBAN"
+email = "manuel.guevara-garban@u-bordeaux.fr"
+
+[project.license]
+text = "GPLv3"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-mypy",
+    "pytest-pylint",
+    "pytest-watch",
+    "pylint",
+    "ruff",
+    "black",
+    "mypy",
+    "hypothesis",
+    "h5py",
+]
+all = ["gnn_local_stress[test]"]
+
+[project.urls]
+"Bug Tracker" = "https://github.com/ricardo0115/p-div-gnn/issues"
+"Source Code" = "https://github.com/ricardo0115/p-div-gnn"
+
+[tool.mypy]
+follow_imports = "silent"
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+disallow_any_explicit = true
+check_untyped_defs = true
+plugins = "numpy.typing.mypy_plugin"
+namespace_packages = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = [
+    "torchvision.io",
+    "hypothesis",
+    "hypothesis.strategies",
+    "sklearn.cluster",
+    "sklearn.base",
+    "scipy",
+    "matplotlib",
+    "matplotlib.pyplot",
+    "torch",
+    "torch_geometry",
+]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 80
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.setuptools.package-data]
+
+[tool.pytest.ini_options]
+testpaths = "test"
+
+[tool.setuptools.dynamic.version]
+attr = "gnn_local_stress._version.__version__"
+
+[tool.setuptools.packages.find]
+include = [
+    "gnn_local_stress",
+    "gnn_local_stress.*",
+]

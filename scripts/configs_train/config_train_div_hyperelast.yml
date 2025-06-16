@@ -1,0 +1,14 @@
+dataset_train_csv: dataset_10k_elast/train/dataset.csv
+dataset_test_csv: dataset_10k_elast/test/dataset.csv
+results_folder: hyperelast_results_200e_bs16/div_periodic_alpha10/
+epochs: 200
+batch_size: 16
+learning_rate: 0.001
+early_stopping_limit: 20
+divergence: True
+divergence_penalty: 10
+latent_size: 128
+message_passing_steps: 10
+train_all_epochs: True
+monitor_divergence_in_test: True
+periodic_graph: True
