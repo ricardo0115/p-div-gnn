@@ -185,7 +185,7 @@ If you find this project useful, please consider citing the corresponding paper:
 @article{pdivgnn2025,
   title={Physics-Informed Graph Neural Networks to Reconstruct Local Fields Considering Finite Strain Hyperelasticity},
   author={M. Guevara Garban, Y. Chemisky, E. Prulière, M. Clément},
-  journal={International Journal for Numerical Methods in Engineering},
+  journal={TBD},
   year={2025},
   doi={XXXXXXX}
 }
