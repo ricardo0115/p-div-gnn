@@ -70,7 +70,7 @@ python3 generate_dataset_hyperelast.py \
 
 ## 📚 Training
 
-You can configure training parameters in the `.yml` files under `configs_trains/`.
+You can configure training parameters in the `.yml` files under `configs_train/`.
 
 From `scripts/`:
 
@@ -78,23 +78,23 @@ From `scripts/`:
 
 ```bash
 # P-DivGNN
-python3 gnn_train.py --config_path configs_trains/config_train_div.yml
+python3 gnn_train.py --config_path configs_train/config_train_div.yml
 
 # P-GNN
-python3 gnn_train.py --config_path configs_trains/config_train_no_div.yml
+python3 gnn_train.py --config_path configs_train/config_train_no_div.yml
 
 # GNN (no periodic edges)
-python3 gnn_train.py --config_path configs_trains/config_train_no_periodic.yml
+python3 gnn_train.py --config_path configs_train/config_train_no_periodic.yml
 ```
 
 ### 🔁 Hyperelastic Training
 
 ```bash
 # P-DivGNN
-python3 gnn_train.py --config_path configs_trains/config_train_div_hyperelast.yml
+python3 gnn_train.py --config_path configs_train/config_train_div_hyperelast.yml
 
 # P-GNN
-python3 gnn_train.py --config_path configs_trains/config_train_no_div_hyperelast.yml
+python3 gnn_train.py --config_path configs_train/config_train_no_div_hyperelast.yml
 ```
 
 ---
@@ -106,16 +106,16 @@ From `scripts/`:
 ### 🧪 Linear Elastic Inference
 
 ```bash
-python3 gnn_inference.py --config_path configs_inferences/config_inference_div.yml
-python3 gnn_inference.py --config_path configs_inferences/config_inference_no_div.yml
-python3 gnn_inference.py --config_path configs_inferences/config_inference_no_periodic.yml
+python3 gnn_inference.py --config_path configs_inference/config_inference_div.yml
+python3 gnn_inference.py --config_path configs_inference/config_inference_no_div.yml
+python3 gnn_inference.py --config_path configs_inference/config_inference_no_periodic.yml
 ```
 
 ### 🧪 Hyperelastic Inference
 
 ```bash
-python3 gnn_inference.py --config_path configs_inferences/config_inference_div_hyperelast.yml
-python3 gnn_inference.py --config_path configs_inferences/config_inference_no_div_hyperelast.yml
+python3 gnn_inference.py --config_path configs_inference/config_inference_div_hyperelast.yml
+python3 gnn_inference.py --config_path configs_inference/config_inference_no_div_hyperelast.yml
 ```
 
 ---
