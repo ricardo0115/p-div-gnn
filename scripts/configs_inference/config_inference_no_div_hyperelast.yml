@@ -1,6 +1,6 @@
 dataset_csv: dataset_10k_hyperelast/test/dataset.csv
 results_folder: inferences_hyperelast/P-GNN/
-model_weights_path: hyperelast_results_200e_bs16/no_div_periodic/weights/last_epoch_model_weights.pth
+model_weights_path: hyperelast_results_200e_bs16_bs16/no_div_periodic/weights/last_epoch_model_weights.pth
 device: cuda # cpu
 latent_size: 128
 message_passing_steps: 10
