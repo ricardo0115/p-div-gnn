@@ -154,14 +154,6 @@ python3 compare_results.py \
   --baseline_model_folder inferences_hyperelast/P-GNN \
   --ground_truth_csv dataset_10k_hyperelast/test/dataset.csv \
   --topk 50
-
-# P-GNN vs GNN
-python3 compare_results.py \
-  --figures_folder plots_hyperelast \
-  --proposed_model_folder inferences_hyperelast/P-GNN \
-  --baseline_model_folder inferences_hyperelast/GNN \
-  --ground_truth_csv dataset_10k_hyperelast/test/dataset.csv \
-  --topk 50
 ```
 
 ---
