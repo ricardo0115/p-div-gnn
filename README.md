@@ -166,7 +166,7 @@ python3 compare_results.py \
 
 ---
 
-## 🧪 FEM vs GNN Benchmark
+## 🕙 FEM vs GNN Benchmark
 
 ```bash
 # For linear elasticity
