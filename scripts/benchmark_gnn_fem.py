@@ -416,7 +416,9 @@ def convert_mesh_to_graph(
 
 
 def plot_data_benchmark(
-    data: dict[str, object], output_file: str | None = None
+    data: dict[str, object],
+    output_file: str | None = None,
+    hyperelastic: bool | None = True,
 ) -> None:
     # Set the plotting style
     plt.style.use("seaborn-v0_8-whitegrid")
@@ -459,8 +461,12 @@ def plot_data_benchmark(
     ax.set_xlabel(r"Number of nodes")
     ax.set_ylabel(r"Time [s]")
     ax.set_yscale("log")
-    ax.set_title("Computation Time vs. Number of Nodes (Linear elasticity)")
-
+    if hyperelastic:
+        ax.set_title(
+            "Computation Time vs. Number of Nodes (Non linear hyper-elasticity)"
+        )
+    else:
+        ax.set_title("Computation Time vs. Number of Nodes (Linear elasticity)")
     # Grid and legend
     ax.grid(True, which="both", ls="--", linewidth=0.5)
     ax.legend()
@@ -569,13 +575,12 @@ def main(csv_data_filename: str = None, hyperelastic: bool = True) -> None:
         }
     else:
         data_results = pd.read_csv(csv_data_filename)
-        plot_data_benchmark(data_results)
-        return
+        plot_data_benchmark(data_results, hyperelastic=hyperelastic)
     if hyperelastic:
         plot_filename = "benchmark_fem_hyperelastic_vs_gnn.pdf"
     else:
         plot_filename = "benchmark_fem_vs_gnn.pdf"
-    plot_data_benchmark(data_results, plot_filename)
+    plot_data_benchmark(data_results, plot_filename, hyperelastic=hyperelastic)
     df = pd.DataFrame(data_results)
     csv_filename = "benchmark_data.csv"
     df.to_csv(csv_filename, index=False)
