@@ -9,6 +9,7 @@
 Official repository for the paper:
 
 > **Physics-Informed Graph Neural Networks to Reconstruct Local Fields Considering Finite Strain Hyperelasticity**
+https://onlinelibrary.wiley.com/doi/10.1002/nme.70193
 
 This work proposes **P-DivGNN**, a divergence regularized physics-informed
 graph neural network tailored for accurately reconstructing mechanical fields
