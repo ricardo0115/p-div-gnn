@@ -33,10 +33,10 @@ import pandas as pd
 import pyvista as pv
 import scipy
 from fire import Fire
-from microgen.mesh import is_periodic
 from tqdm.contrib.concurrent import process_map
 
 from gnn_local_stress import datasets
+from gnn_local_stress.periodicity import is_periodic
 
 
 class MeanStress(NamedTuple):
@@ -204,12 +204,10 @@ def compute_mechanical_fields_dirichlet(
     op_mean_stress = _compute_mean_stress_operator(mesh)
     fd.Assembly.delete_memory()
     # --------------- Pre-Treatment --------------------------------------------------------
-    space = fd.ModelingSpace("2Dstress")
+    fd.ModelingSpace("2Dstress")
 
     type_el = mesh.elm_type
     center = mesh.nearest_node(mesh.bounding_box.center)
-
-    strain_nodes = mesh.add_virtual_nodes(2)
 
     material = fd.constitutivelaw.ElasticIsotrop(young_modulus, poisson_ratio)
 
@@ -221,52 +219,24 @@ def compute_mechanical_fields_dirichlet(
     # Type of problem
     pb = fd.problem.Linear(assemb)
 
-    # Shall add other conditions later on
-    bc_periodic = fd.constraint.PeriodicBC(
-        [strain_nodes[0], strain_nodes[1], strain_nodes[0]],
-        ["DispX", "DispY", "DispY"],
-        dim=2,
-    )
+    # Periodic BC: adds global DOFs 'E_xx', 'E_yy', 'E_xy' (mean strain).
+    bc_periodic = fd.constraint.PeriodicBC("small_strain", dim=2)
     pb.bc.add(bc_periodic)
 
-    pb.bc.add("Dirichlet", strain_nodes[1], "DispX", 0)
     pb.bc.add("Dirichlet", center, "Disp", 0, name="center")
 
     pb.apply_boundary_conditions()
 
     pb.bc.remove("_Strain")
-    pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[0]],
-        "DispX",
-        eps_xx,
-        start_value=0,
-        name="_Strain",
-    )  # EpsXX
-    pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[1]],
-        "DispY",
-        eps_yy,
-        start_value=0,
-        name="_Strain",
-    )  # EpsYY
-    pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[0]],
-        "DispY",
-        gamma_xy,
-        start_value=0,
-        name="_Strain",
-    )  # 2EpsXY
+    pb.bc.add("Dirichlet", "E_xx", eps_xx, start_value=0, name="_Strain")
+    pb.bc.add("Dirichlet", "E_yy", eps_yy, start_value=0, name="_Strain")
+    pb.bc.add("Dirichlet", "E_xy", gamma_xy, start_value=0, name="_Strain")
 
     pb.apply_boundary_conditions()
 
     pb.solve()
-    i = 0
 
     res = pb.get_results(assemb, ["Disp", "Stress", "Strain"], "Node")
-    # mean_stress
 
     stress_field_per_node = pb.get_results(assemb, "Stress", "Node")["Stress"]
     strain_field_per_node = pb.get_results(assemb, "Strain", "Node")["Strain"]
@@ -287,15 +257,9 @@ def compute_mechanical_fields_dirichlet(
         / volume_material
         for i in xx_yy_xy_indices
     ]
-    # Debug
-    # for component in ["XX", "YY", "XY", "vm"]:
-    #    pb.get_results(assemb, "Stress", "Node").plot(
-    #        "Stress", component=component
-    #    )
-    # Remove virtual nodes added by fedoo
     return MechanicalFields(
-        stress_field_per_node=stress_field_per_node.T[:-2, :],
-        strain_field_per_node=strain_field_per_node.T[:-2, :],
+        stress_field_per_node=stress_field_per_node.T,
+        strain_field_per_node=strain_field_per_node.T,
         mean_stress=MeanStress(*mean_stress),
         mean_stress_material=MeanStress(*mean_stress_material),
         op_div_matrix=op_div_matrix,
@@ -315,11 +279,9 @@ def compute_mechanical_fields_neumann(
     op_mean_stress = _compute_mean_stress_operator(mesh)
     fd.Assembly.delete_memory()
     # --------------- Pre-Treatment --------------------------------------------------------
-    space = fd.ModelingSpace("2Dstress")
+    fd.ModelingSpace("2Dstress")
     type_el = mesh.elm_type
     center = mesh.nearest_node(mesh.bounding_box.center)
-
-    strain_nodes = mesh.add_virtual_nodes(2)
 
     material = fd.constitutivelaw.ElasticIsotrop(young_modulus, poisson_ratio)
 
@@ -331,53 +293,36 @@ def compute_mechanical_fields_neumann(
     # Type of problem
     pb = fd.problem.Linear(assemb)
 
-    # Shall add other conditions later on
-    bc_periodic = fd.constraint.PeriodicBC(
-        [strain_nodes[0], strain_nodes[1], strain_nodes[0]],
-        ["DispX", "DispY", "DispY"],
-        dim=2,
-    )
+    # Periodic BC: adds global DOFs 'E_xx', 'E_yy', 'E_xy' (mean strain).
+    bc_periodic = fd.constraint.PeriodicBC("small_strain", dim=2)
     pb.bc.add(bc_periodic)
 
-    pb.bc.add("Dirichlet", strain_nodes[1], "DispX", 0)
     pb.bc.add("Dirichlet", center, "Disp", 0, name="center")
 
     pb.apply_boundary_conditions()
 
     pb.bc.remove("_Strain")
+    # Neumann on a mean-strain DOF imposes the work-conjugate generalized
+    # force, which equals mean_stress * volume.
     mesh_volume = mesh.bounding_box.volume
     pb.bc.add(
-        "Neumann",
-        [strain_nodes[0]],
-        "DispX",
-        sigma_xx * mesh_volume,
-        start_value=0,
-        name="_Strain",
-    )  # EpsXX
+        "Neumann", "E_xx", sigma_xx * mesh_volume,
+        start_value=0, name="_Strain",
+    )
     pb.bc.add(
-        "Neumann",
-        [strain_nodes[1]],
-        "DispY",
-        sigma_yy * mesh_volume,
-        start_value=0,
-        name="_Strain",
-    )  # EpsYY
+        "Neumann", "E_yy", sigma_yy * mesh_volume,
+        start_value=0, name="_Strain",
+    )
     pb.bc.add(
-        "Neumann",
-        [strain_nodes[0]],
-        "DispY",
-        sigma_xy * mesh_volume,
-        start_value=0,
-        name="_Strain",
-    )  # 2EpsXY
+        "Neumann", "E_xy", sigma_xy * mesh_volume,
+        start_value=0, name="_Strain",
+    )
 
     pb.apply_boundary_conditions()
 
     pb.solve()
-    i = 0
 
     res = pb.get_results(assemb, ["Disp", "Stress", "Strain"], "Node")
-    # mean_stress
 
     stress_field_per_node = pb.get_results(assemb, "Stress", "Node")["Stress"]
     strain_field_per_node = pb.get_results(assemb, "Strain", "Node")["Strain"]
@@ -386,11 +331,6 @@ def compute_mechanical_fields_neumann(
     stress_field_per_node = stress_field_per_node[xx_yy_xy_indices]
     strain_field_per_node = strain_field_per_node[xx_yy_xy_indices]
 
-    # Compute mean stress
-    # mean_stress = [
-    #    mesh.integrate_field(res["Stress", i], type_field="Node") / volume
-    #    for i in xx_yy_xy_indices
-    # ]
     # Volume without taking into account hole empty surface
     mesh_volume_material = mesh.integrate_field(np.ones(mesh.n_nodes))
 
@@ -401,8 +341,8 @@ def compute_mechanical_fields_neumann(
     ]
 
     return MechanicalFields(
-        stress_field_per_node=stress_field_per_node.T[:-2, :],
-        strain_field_per_node=strain_field_per_node.T[:-2, :],
+        stress_field_per_node=stress_field_per_node.T,
+        strain_field_per_node=strain_field_per_node.T,
         mean_stress=MeanStress(sigma_xx, sigma_yy, sigma_xy),
         mean_stress_material=MeanStress(*mean_stress_material),
         op_div_matrix=op_div_matrix,

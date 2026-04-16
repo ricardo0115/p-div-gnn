@@ -33,10 +33,10 @@ import pyvista as pv
 import scipy
 import simcoon
 from fire import Fire
-from microgen.mesh import is_periodic
 from tqdm.contrib.concurrent import process_map
 
 from gnn_local_stress import datasets
+from gnn_local_stress.periodicity import is_periodic
 
 
 class MeanStress(NamedTuple):
@@ -254,13 +254,11 @@ def compute_mechanical_fields_dirichlet(
     deformed_volume = mesh.bounding_box.volume * det_F
     fd.Assembly.delete_memory()
     # --------------- Pre-Treatment --------------------------------------------------------
-    space = fd.ModelingSpace("2Dplane")
+    fd.ModelingSpace("2Dplane")
     type_el = mesh.elm_type
     center = mesh.nearest_node(mesh.bounding_box.center)
 
-    strain_nodes = mesh.add_virtual_nodes(2)
     C10 = 1.5  # mu = 2*(C10+C01)
-    C01 = 0
     # kappa = 0.5e2  # =2/D1
     kappa = 10
     props = np.array([2 * C10, kappa])
@@ -276,14 +274,9 @@ def compute_mechanical_fields_dirichlet(
     pb = fd.problem.NonLinear(assemb, nlgeom=True)
 
     grad_U = F - np.eye(3)
-    bc_periodic = fd.constraint.PeriodicBC(
-        [
-            [strain_nodes[0], strain_nodes[0]],
-            [strain_nodes[1], strain_nodes[1]],
-        ],
-        [["DispX", "DispY"], ["DispX", "DispY"]],
-        dim=2,
-    )
+    # Periodic BC: adds global DOFs 'DU_xx', 'DU_yy', 'DU_xy', 'DU_yx'
+    # (components of the mean displacement gradient).
+    bc_periodic = fd.constraint.PeriodicBC("finite_strain", dim=2)
 
     pb.bc.add(bc_periodic)
 
@@ -291,44 +284,27 @@ def compute_mechanical_fields_dirichlet(
 
     pb.bc.remove("_Strain")
     pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[0]],
-        "DispX",
-        grad_U[0, 0],
-        start_value=0,
-        name="_Strain",
-    )  # dU/dx
+        "Dirichlet", "DU_xx", grad_U[0, 0],
+        start_value=0, name="_Strain",
+    )
     pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[1]],
-        "DispY",
-        grad_U[1, 1],
-        start_value=0,
-        name="_Strain",
-    )  # dV/dy
+        "Dirichlet", "DU_yy", grad_U[1, 1],
+        start_value=0, name="_Strain",
+    )
     pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[0]],
-        "DispY",
-        grad_U[0, 1],
-        start_value=0,
-        name="_Strain",
-    )  # dU/dy
+        "Dirichlet", "DU_xy", grad_U[0, 1],
+        start_value=0, name="_Strain",
+    )
     pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[1]],
-        "DispX",
-        grad_U[1, 0],
-        start_value=0,
-        name="_Strain",
-    )  # dV/dx
+        "Dirichlet", "DU_yx", grad_U[1, 0],
+        start_value=0, name="_Strain",
+    )
 
     pb.apply_boundary_conditions()
 
     pb.set_nr_criterion(max_subiter=5, err0=None, tol=1e-3)
     pb.nlsolve(dt=0.02, update_dt=True, interval_output=0.05, print_info=0)
     res = pb.get_results(assemb, ["Disp", "Stress", "Strain"], "Node")
-    # mean_stress
 
     stress_field_per_node = pb.get_results(assemb, "Stress", "Node")["Stress"]
     strain_field_per_node = pb.get_results(assemb, "Strain", "Node")["Strain"]
@@ -343,16 +319,10 @@ def compute_mechanical_fields_dirichlet(
         / deformed_volume
         for i in xx_yy_xy_indices
     ]
-    # Debug
-    # for component in ["XX", "YY", "XY", "vm"]:
-    #    pb.get_results(assemb, "Stress", "Node").plot(
-    #        "Stress", component=component
-    #    )
-    # Remove virtual nodes added by fedoo
     op_div_matrix = _compute_op_div_matrix(assemb.current.mesh)
     return MechanicalFields(
-        stress_field_per_node=stress_field_per_node.T[:-2, :],
-        strain_field_per_node=strain_field_per_node.T[:-2, :],
+        stress_field_per_node=stress_field_per_node.T,
+        strain_field_per_node=strain_field_per_node.T,
         mean_stress=MeanStress(*mean_stress),
         op_div_matrix=op_div_matrix,
     )

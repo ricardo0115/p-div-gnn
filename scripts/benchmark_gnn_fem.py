@@ -31,7 +31,6 @@ import simcoon
 import torch
 import torch_geometric as PyG
 from fire import Fire
-from microgen.remesh import is_periodic
 
 from gnn_local_stress import models
 from gnn_local_stress.convert_utils import mesh_to_graph
@@ -41,6 +40,7 @@ from gnn_local_stress.datasets import (
     compute_node_labels,
     compute_periodic_graph,
 )
+from gnn_local_stress.periodicity import is_periodic
 
 GPU_ONLY = True
 
@@ -198,25 +198,19 @@ def hole_plate_mesh(
 
 def compute_mechanical_fields(
     mesh: fd.Mesh,
-    sigma_xx: float,
-    sigma_yy: float,
-    sigma_xy: float,
+    eps_xx: float,
+    eps_yy: float,
+    gamma_xy: float,
     young_modulus: float = 1e5,
     poisson_ratio: float = 0.3,
 ) -> np.ndarray:
     mesh.reset_interpolation()
     fd.Assembly.delete_memory()
     # --------------- Pre-Treatment --------------------------------------------------------
-    space = fd.ModelingSpace("2Dstress")
+    fd.ModelingSpace("2Dstress")
 
     type_el = mesh.elm_type
     center = mesh.nearest_node(mesh.bounding_box.center)
-    sigma_xx, sigma_yy, sigma_xy = (
-        sigma_xx * mesh.bounding_box.volume,
-        sigma_yy * mesh.bounding_box.volume,
-        sigma_xy * mesh.bounding_box.volume,
-    )
-    strain_nodes = mesh.add_virtual_nodes(2)
 
     material = fd.constitutivelaw.ElasticIsotrop(young_modulus, poisson_ratio)
 
@@ -228,53 +222,31 @@ def compute_mechanical_fields(
     # Type of problem
     pb = fd.problem.Linear(assemb)
 
-    # Shall add other conditions later on
-    bc_periodic = fd.constraint.PeriodicBC(
-        [strain_nodes[0], strain_nodes[1], strain_nodes[0]],
-        ["DispX", "DispY", "DispY"],
-        dim=2,
-    )
+    # Periodic BC: adds global DOFs 'E_xx', 'E_yy', 'E_xy' (mean strain).
+    bc_periodic = fd.constraint.PeriodicBC("small_strain", dim=2)
     pb.bc.add(bc_periodic)
 
-    pb.bc.add("Dirichlet", strain_nodes[1], "DispX", 0)
     pb.bc.add("Dirichlet", center, "Disp", 0, name="center")
 
     pb.apply_boundary_conditions()
 
     pb.bc.remove("_Strain")
+    pb.bc.add("Dirichlet", "E_xx", eps_xx, start_value=0, name="_Strain")
+    pb.bc.add("Dirichlet", "E_yy", eps_yy, start_value=0, name="_Strain")
     pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[0]],
-        "DispX",
-        sigma_xx,
-        start_value=0,
-        name="_Strain",
-    )  # EpsXX
-    pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[1]],
-        "DispY",
-        sigma_yy,
-        start_value=0,
-        name="_Strain",
-    )  # EpsYY
-    pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[0]],
-        "DispY",
-        sigma_xy,
-        start_value=0,
-        name="_Strain",
-    )  # 2EpsXY
+        "Dirichlet", "E_xy", gamma_xy, start_value=0, name="_Strain"
+    )
 
     pb.apply_boundary_conditions()
 
     pb.solve()
 
     stress_field_per_node = pb.get_results(assemb, "Stress", "Node")["Stress"]
+    if not np.isfinite(stress_field_per_node).all():
+        raise ValueError("Linear FEM returned non-finite nodal stresses")
     mesh.reset_interpolation()
     fd.Assembly.delete_memory()
-    return stress_field_per_node[:, :-2]
+    return stress_field_per_node
 
 
 def compute_mechanical_fields_hyperelast(
@@ -292,14 +264,12 @@ def compute_mechanical_fields_hyperelast(
     deformed_volume = mesh.bounding_box.volume * det_F
     fd.Assembly.delete_memory()
     # --------------- Pre-Treatment --------------------------------------------------------
-    space = fd.ModelingSpace("2Dplane")
+    fd.ModelingSpace("2Dplane")
 
     type_el = mesh.elm_type
     center = mesh.nearest_node(mesh.bounding_box.center)
 
-    strain_nodes = mesh.add_virtual_nodes(2)
     C10 = 1.5  # mu = 2*(C10+C01)
-    C01 = 0
     # kappa = 0.5e2  # =2/D1
     kappa = 10
     props = np.array([2 * C10, kappa])
@@ -315,14 +285,9 @@ def compute_mechanical_fields_hyperelast(
     pb = fd.problem.NonLinear(assemb, nlgeom=True)
 
     grad_U = F - np.eye(3)
-    bc_periodic = fd.constraint.PeriodicBC(
-        [
-            [strain_nodes[0], strain_nodes[0]],
-            [strain_nodes[1], strain_nodes[1]],
-        ],
-        [["DispX", "DispY"], ["DispX", "DispY"]],
-        dim=2,
-    )
+    # Periodic BC: adds global DOFs 'DU_xx', 'DU_yy', 'DU_xy', 'DU_yx'
+    # (components of the mean displacement gradient).
+    bc_periodic = fd.constraint.PeriodicBC("finite_strain", dim=2)
 
     pb.bc.add(bc_periodic)
 
@@ -330,46 +295,31 @@ def compute_mechanical_fields_hyperelast(
 
     pb.bc.remove("_Strain")
     pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[0]],
-        "DispX",
-        grad_U[0, 0],
-        start_value=0,
-        name="_Strain",
-    )  # dU/dx
+        "Dirichlet", "DU_xx", grad_U[0, 0],
+        start_value=0, name="_Strain",
+    )
     pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[1]],
-        "DispY",
-        grad_U[1, 1],
-        start_value=0,
-        name="_Strain",
-    )  # dV/dy
+        "Dirichlet", "DU_yy", grad_U[1, 1],
+        start_value=0, name="_Strain",
+    )
     pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[0]],
-        "DispY",
-        grad_U[0, 1],
-        start_value=0,
-        name="_Strain",
-    )  # dU/dy
+        "Dirichlet", "DU_xy", grad_U[0, 1],
+        start_value=0, name="_Strain",
+    )
     pb.bc.add(
-        "Dirichlet",
-        [strain_nodes[1]],
-        "DispX",
-        grad_U[1, 0],
-        start_value=0,
-        name="_Strain",
-    )  # dV/dx
+        "Dirichlet", "DU_yx", grad_U[1, 0],
+        start_value=0, name="_Strain",
+    )
 
     pb.apply_boundary_conditions()
 
     pb.set_nr_criterion(max_subiter=5, err0=None, tol=1e-3)
     pb.nlsolve(dt=0.02, update_dt=True, interval_output=0.05, print_info=1)
     res = pb.get_results(assemb, ["Disp", "Stress", "Strain"], "Node")
-    # mean_stress
 
     stress_field_per_node = pb.get_results(assemb, "Stress", "Node")["Stress"]
+    if not np.isfinite(stress_field_per_node).all():
+        raise ValueError("Hyperelastic FEM returned non-finite nodal stresses")
     strain_field_per_node = pb.get_results(assemb, "Strain", "Node")["Strain"]
     # Filter XX, YY, XY
     xx_yy_xy_indices = [0, 1, 3]

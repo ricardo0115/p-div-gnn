@@ -21,9 +21,9 @@ from tempfile import NamedTemporaryFile
 import gmsh
 import numpy as np
 import pyvista as pv
-from microgen.mesh import is_periodic
 
 from gnn_local_stress import datasets
+from gnn_local_stress.periodicity import is_periodic
 
 WINDOW_SIZE = (2000, 2000)
 OFF_SCREEN = True
